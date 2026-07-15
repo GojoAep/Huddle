@@ -778,6 +778,7 @@ function go(viewId){
     view.classList.add('view-enter');
     if(viewId === 'coach-match-form'){ showMatchForm(); }
   }
+  window.scrollTo({top: 0, behavior: 'smooth'});
 }
 
 /* ============ SESSION MANAGEMENT ============ */
@@ -836,23 +837,31 @@ async function createTeam(){
   if(!teamName){ err.textContent = 'Enter a team name.'; return; }
   if(!coachName){ err.textContent = 'Enter your name.'; return; }
   
-  const code = uid().substring(0,4);
-  const team = {
-    code,
-    teamName,
-    coachName,
-    players: [],
-    slots: [],
-    nextPractice: { date: '', time: '', location: '', notes: '' }
-  };
-  
-  await saveTeam(code, team);
-  setSession({role:'coach', code});
-  document.getElementById('ct-teamname').value = '';
-  document.getElementById('ct-coachname').value = '';
-  renderCoachDash(code);
-  showToast('Team created!');
-  go('coach-dash');
+  try{
+    err.textContent = 'Creating team...';
+    const code = uid().substring(0,4);
+    const team = {
+      code,
+      teamName,
+      coachName,
+      players: [],
+      slots: [],
+      nextPractice: { date: '', time: '', location: '', notes: '' },
+      createdAt: Date.now()
+    };
+    
+    await saveTeam(code, team);
+    setSession({role:'coach', code});
+    document.getElementById('ct-teamname').value = '';
+    document.getElementById('ct-coachname').value = '';
+    err.textContent = '';
+    showToast('Team created!');
+    await renderCoachDash(code);
+    go('coach-dash');
+  } catch(e){
+    err.textContent = 'Error creating team. Check your connection.';
+    console.error(e);
+  }
 }
 
 async function renderCoachDash(code){
@@ -992,15 +1001,25 @@ async function findTeam(){
   const raw = document.getElementById('pj-code').value.trim().toUpperCase();
   const err = document.getElementById('pj-err');
   err.textContent = '';
-  const team = await loadTeam(raw);
-  if(!team){
-    err.textContent = "Can't find a team with that code. Double check with your coach.";
-    return;
+  
+  if(!raw){ err.textContent = 'Enter a team code.'; return; }
+  
+  try{
+    err.textContent = 'Looking up team...';
+    const team = await loadTeam(raw);
+    if(!team){
+      err.textContent = "Can't find a team with that code. Double check with your coach.";
+      return;
+    }
+    pendingJoinCode = raw;
+    document.getElementById('pj-code').value = '';
+    err.textContent = '';
+    await renderSignup(raw);
+    go('player-signup');
+  } catch(e){
+    err.textContent = 'Error connecting. Check your connection and try again.';
+    console.error(e);
   }
-  pendingJoinCode = raw;
-  document.getElementById('pj-code').value = '';
-  renderSignup(raw);
-  go('player-signup');
 }
 
 async function renderSignup(code){
@@ -1035,22 +1054,31 @@ async function signUp(){
   err.textContent = '';
   const name = document.getElementById('ps-name').value.trim();
   if(!name){ err.textContent = 'Enter your name.'; return; }
-  const team = await loadTeam(pendingJoinCode);
-  if(!team){ err.textContent = 'This team no longer exists.'; return; }
-  let slotId = null;
-  if(team.slots.length > 0){
-    const checked = document.querySelector('input[name="ps-slot"]:checked');
-    if(!checked){ err.textContent = 'Pick a meeting time.'; return; }
-    slotId = checked.value;
+  
+  try{
+    const team = await loadTeam(pendingJoinCode);
+    if(!team){ err.textContent = 'This team no longer exists.'; return; }
+    
+    let slotId = null;
+    if(team.slots.length > 0){
+      const checked = document.querySelector('input[name="ps-slot"]:checked');
+      if(!checked){ err.textContent = 'Pick a meeting time.'; return; }
+      slotId = checked.value;
+    }
+    
+    const playerId = uid();
+    team.players.push({id: playerId, name, slotId, signedUpAt: Date.now()});
+    await saveTeam(team.code, team);
+    setSession({role:'player', code: team.code, playerId});
+    document.getElementById('ps-name').value = '';
+    err.textContent = '';
+    showToast('You\'re on the roster');
+    await renderPlayerDash(team.code, playerId);
+    go('player-dash');
+  } catch(e){
+    err.textContent = 'Error signing up. Try again.';
+    console.error(e);
   }
-  const playerId = uid();
-  team.players.push({id: playerId, name, slotId, signedUpAt: Date.now()});
-  await saveTeam(team.code, team);
-  setSession({role:'player', code: team.code, playerId});
-  document.getElementById('ps-name').value = '';
-  renderPlayerDash(team.code, playerId);
-  showToast('You\'re on the roster');
-  go('player-dash');
 }
 
 async function renderPlayerDash(code, playerId){
@@ -1398,8 +1426,9 @@ function copyCode(){
 
 function logout(){
   clearSession();
-  go('landing');
   document.getElementById('topbarRight').innerHTML = '';
+  showToast('Signed out');
+  go('landing');
 }
 
 /* ============ CONFIRM MODAL ============ */
