@@ -122,6 +122,10 @@
   .linkbtn:hover{color:var(--gold-bright);}
 
   main{ max-width:1040px; margin:0 auto; padding:clamp(28px,5vw,64px) clamp(20px,5vw,56px) 100px; }
+  #cd-group-nav { display:flex; gap:8px; overflow-x:auto; margin-bottom:24px; padding-bottom:8px; -webkit-overflow-scrolling:touch; scroll-behavior:smooth; }
+  #cd-group-nav::-webkit-scrollbar { height:2px; }
+  #cd-group-nav::-webkit-scrollbar-track { background:transparent; }
+  #cd-group-nav::-webkit-scrollbar-thumb { background:var(--line); border-radius:1px; }
   .hidden{display:none !important;}
 
   /* ---- Landing ---- */
@@ -988,11 +992,14 @@ async function renderCoachDash(code){
     
     document.getElementById('cd-rostercount').textContent = totalPlayers;
     
-    // Render group navigation tabs
+    // Render group navigation tabs - in correct order
     const groupNav = document.getElementById('cd-group-nav');
     if(groupNav){
       const currentGroup = s ? s.currentGroup : Object.keys(allGroups)[0];
-      groupNav.innerHTML = Object.keys(allGroups).map(groupName => {
+      const groupOrder = ['Κ6', 'Κ8', 'Κ10', 'Κ12', 'Κ14', 'Κ16', '1st'];
+      const orderedGroups = groupOrder.filter(g => allGroups[g]);
+      
+      groupNav.innerHTML = orderedGroups.map(groupName => {
         const groupData = allGroups[groupName];
         const playerCount = (groupData.players || []).length;
         const isActive = groupName === currentGroup;
